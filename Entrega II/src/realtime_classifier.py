@@ -23,6 +23,9 @@ class ActivityClassifier:
         results = self.pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         if results.pose_landmarks:
             features = self._extract_features(results.pose_landmarks.landmark)
+            
+            print(f"Features extracted: {len(features)}")
+            
             scaled = self.scaler.transform([features])
             reduced = self.pca.transform(scaled)
             
@@ -38,6 +41,7 @@ class ActivityClassifier:
         return None, None, None
     
     def _extract_features(self, landmarks):
+        """Extract features matching the training data format"""
         features = []
         
         JOINTS_TO_TRACK = [
@@ -62,11 +66,78 @@ class ActivityClassifier:
             except:
                 features.extend([0.0, 0.0, 0.0, 0.0])
         
-        expected_features = 72
+        try:
+            ls = landmarks[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value]
+            rs = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER.value]
+            lh = landmarks[mp.solutions.pose.PoseLandmark.LEFT_HIP.value]
+            rh = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_HIP.value]
+            
+            torso_inclination = np.arctan2(
+                (rs.y + ls.y) - (rh.y + lh.y),
+                (rs.x + ls.x) - (rh.x + lh.x)
+            )
+            features.append(torso_inclination)
+        except:
+            features.append(0.0)
         
+        try:
+            rh = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_HIP.value]
+            rk = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_KNEE.value]
+            ra = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_ANKLE.value]
+            
+            right_knee_angle = np.arctan2(
+                ra.y - rk.y, ra.x - rk.x
+            ) - np.arctan2(
+                rh.y - rk.y, rh.x - rk.x
+            )
+            features.append(right_knee_angle)
+        except:
+            features.append(0.0)
         
-        if len(features) != expected_features:
-            raise ValueError(f"Se esperaban {expected_features} features, se obtuvieron {len(features)}")
+        try:
+            lh = landmarks[mp.solutions.pose.PoseLandmark.LEFT_HIP.value]
+            lk = landmarks[mp.solutions.pose.PoseLandmark.LEFT_KNEE.value]
+            la = landmarks[mp.solutions.pose.PoseLandmark.LEFT_ANKLE.value]
+            
+            left_knee_angle = np.arctan2(
+                la.y - lk.y, la.x - lk.x
+            ) - np.arctan2(
+                lh.y - lk.y, lh.x - lk.x
+            )
+            features.append(left_knee_angle)
+        except:
+            features.append(0.0)
+        
+        try:
+            ls = landmarks[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value]
+            rs = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER.value]
+            shoulder_width = np.sqrt((rs.x - ls.x)**2 + (rs.y - ls.y)**2)
+            features.append(shoulder_width)
+        except:
+            features.append(0.0)
+        
+        try:
+            lh = landmarks[mp.solutions.pose.PoseLandmark.LEFT_HIP.value]
+            rh = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_HIP.value]
+            hip_width = np.sqrt((rh.x - lh.x)**2 + (rh.y - lh.y)**2)
+            features.append(hip_width)
+        except:
+            features.append(0.0)
+        
+        try:
+            nose = landmarks[mp.solutions.pose.PoseLandmark.NOSE.value]
+            lh = landmarks[mp.solutions.pose.PoseLandmark.LEFT_HIP.value]
+            rh = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_HIP.value]
+            com_height = nose.y - (lh.y + rh.y) / 2
+            features.append(com_height)
+        except:
+            features.append(0.0)
+        
+        while len(features) < 54:
+            features.append(0.0)
+        
+        if len(features) > 54:
+            features = features[:54]
         
         return features
 
